@@ -1,0 +1,117 @@
+---
+ - name: ModulC
+   hosts: servers
+   become: true
+   vars_files:
+         - privvars.yml
+   tasks:
+   - name: list update deb
+     apt: update_cache=yes
+     when: ansible_distribution == 'Debian'
+   - name: list update cen
+     yum: update_cache=yes
+     when: ansible_distribution == 'CentOS'
+   - name: install deb
+     apt: pkg={{ item }}
+     with_items:
+         - docker
+         - docker-compose
+         - git
+         - curl
+         - lynx
+         - firewalld
+         - vim              
+         - mc
+     when: ansible_distribution == 'Debian'
+   - name: install cent
+     yum: pkg={{ item }}
+     with_items:
+         - docker
+         - curl
+         - git
+         - python-pip
+         - firewalld
+         - vim
+         - lynx
+         - mc
+     when: ansible_distribution == 'CentOS'
+   - name: install docker-composer cent
+     pip: name=docker-compose
+     when: ansible_distribution == 'CentOS'
+   - name: git
+     git:
+         repo: https://github.com/andgabs/skill_hmao
+         dest: /skillcloud-nginx
+         clone: yes
+   - name: firewalld en
+     systemd:
+         name: firewalld
+         state: started
+   - name: firewall port
+     firewalld:
+         port: "{{ item }}"
+         permanent: true
+         immediate: true
+         state: enabled
+     with_items:
+         - 80/tcp
+         - 8080/tcp
+         - 1022/tcp
+         - 1022/udp
+   - name: change port
+     lineinfile:
+         path: /etc/ssh/sshd_config
+         regexp: '^#?Port!'
+         line: 'Port 1022'
+         state: present
+   - name: publick key
+     lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PubkeyAuthentication'
+        line: 'PubkeyAuthentication yes'
+   - name: Restart Firewalld
+     service:
+        name: firewalld
+        state: restarted
+   - name: users
+     user:
+        name: "{{ item.username }}"
+        password: "{{ item.password }}"
+        state: present
+        shell: /bin/bash
+        createhome: yes
+     with_items:
+        - '{{users}}'
+   - name: create directories docker
+     file:
+        path: "{{ item }}"
+        state: directory
+     with_items:
+        - /skillcloud-nginx/balance
+        - /skillcloud-nginx/site
+   - name: mv
+     command: mv /skillcloud-nginx/Dockerfile-balance /skillcloud-nginx/balance/Dockerfile
+   - name: mv
+     command: mv /skillcloud-nginx/Dockerfile-site /skillcloud-nginx/site/Dockerfile
+   - name: mv
+     command: mv /skillcloud-nginx/nginx.conf /skillcloud-nginx/balance/nginx.conf
+   - name: mv
+     command: mv /skillcloud-nginx/index.html /skillcloud-nginx/site/index.html
+   - name: docker balance
+     command: docker build /skillcloud-nginx/balance/ -t balance:balance
+     when: ansible_distribution == 'Debian'
+   - name: docker site
+     command: docker build /skillcloud-nginx/site/ -t site:site
+     when: ansible_distribution == 'Debian'
+   - name: restart ssh
+     service:
+        name: sshd
+        state: restarted
+     when: ansible_distribution == 'CentOS'
+   - name: Restart SSH service
+     systemd:
+        name: ssh
+        state: restarted 
+   - name: URA ONO OTRABORALO
+     wait_for:
+        timeout: 20

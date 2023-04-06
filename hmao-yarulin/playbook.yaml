@@ -1,0 +1,151 @@
+---
+- name: git clone repo, decrypt users file, add hosts
+  hosts: localhost
+  tasks:
+    - name: git clone
+      git:
+        repo: https://github.com/andgabs/skill_hmao
+        dest: /skill_hmao
+        clone: yes
+    - name: decrypt users file
+      shell: ansible-vault decrypt --vault-id /hmao-yarulin/password /skill_hmao/Users/privvars.yml
+    - name: add hosts Debian
+      add_host:
+        name: "{{ item }}"
+        group: Debian
+        ansible_ssh_user: root
+        ansible_ssh_pass: toor
+        ansible_host_key_checking: false
+      loop:
+        - "PJD-01"
+        - "PJD-02"
+    - name: add hosts CentOS
+      add_host:
+        name: "{{ item }}"
+        group: Centos
+        ansible_ssh_user: root
+        ansible_ssh_pass: toor
+        ansible_host_key_checking: false
+      loop:
+        - "PJC-01"
+        - "PJC-02"
+- name: update cache and isntall package
+  hosts: all
+  tasks:
+    - name: test connection
+      ping:
+    - name: Update cache Debian
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+    - name: Update cache on Centos
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+    - name: disable selinux
+      selinux:
+        state: disabled
+      when: ansible_os_family == "RedHat"
+    - name: include vars from software.yaml
+      include_vars:
+        file: /skill_hmao/software.yaml
+    - name: install package from software on Debian
+      apt:
+        name: "{{ software }}"
+      when: ansible_os_family == "Debian"
+    - name: install package from software on Centos
+      yum: 
+        name: "{{ software }}"
+      when: ansible_os_family == "RedHat"
+    - name: include vars from privvats.yml
+      include_vars:
+        file: /skill_hmao/Users/privvars.yml
+    - name: add usres from privvars.yml
+      user:
+        name: "{{ item.0 }}"
+        password: "{{ item.1 | password_hash('sha512')}}"
+      with_together:
+        - "{{ skillcloud.users }}"
+        - "{{ skillcloud.passwords }}"
+    - name: add authorized key to user
+      authorized_key:
+        user: "{{ item.0 }}"
+        state: present
+        key: "{{ skillcloud.publickey }}"
+      with_together:
+        - "{{ skillcloud.users }}"
+    - name: install firewalld
+      yum:
+        name: firewalld
+      when: ansible_os_family == "RedHat"
+    - name: enable firewalld on Centos
+      shell: systemctl enable --now firewalld
+      when: ansible_os_family == "RedHat"
+    - name: install fireawlld on Debian
+      apt:
+        name: firewalld
+      when: ansible_os_family == "Debian"
+    - name: add port
+      firewalld:
+        zone: public
+        port: "{{ item }}"
+        state: enabled
+        permanent: true
+        immediate: true
+      loop:
+        - "80/tcp"
+        - "8080/tcp"
+        - "1022/tcp"
+    - name: copy sh script
+      copy:
+        src: /skill_hmao/docker-compose.sh
+        dest: /
+    - name: run docker sh script
+      shell: sh /docker-compose.sh
+    - name: install docker on Debian
+      apt:
+        name: "{{ item }}"
+      loop:
+        - "docker"
+        - "docker-compose"
+      when: ansible_os_family == "Debian"
+    - name: install yum util
+      yum:
+        name: yum-utils
+      when: ansible_os_family == "RedHat"
+    - name: add docker repo
+      shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      when: ansible_os_family == "RedHat"
+    - name: install docker-ce on Centos
+      yum:
+        name: docker-ce
+      when: ansible_os_family == "RedHat"
+    - name: run docker service
+      shell: systemctl enable --now docker.service
+    - name: run docker socket
+      shell: systemctl enable --now docker.socket
+    - name: copy skillcloud-nginx
+      copy:
+        src: /hmao-yarulin/skillcloud-nginx
+        dest: /
+    - name: build docker image site
+      shell: 
+        cmd: docker build -t site:site -f /skillcloud-nginx/Dockerfile-site .
+        chdir: /skillcloud-nginx
+    - name: build docker image balance
+      shell: 
+        cmd: docker build -t balance:balance -f /skillcloud-nginx/Dockerfile-balance .
+        chdir: /skillcloud-nginx
+    - name: add pub key auth
+      shell: echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
+    - name: docker-compose up
+      shell:
+        cmd: docker-compose -f docker-compose.yml up -d
+        chdir: /skillcloud-nginx
+    - name: restart ssh
+      shell: systemctl restart ssh
+      when: ansible_os_family == "Debian"
+    - name: restart firewalld
+      shell: systemctl restart firewalld
+    - name: restart sshd 
+      shell: systemctl restart sshd

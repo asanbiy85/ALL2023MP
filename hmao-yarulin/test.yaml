@@ -1,0 +1,33 @@
+---
+- name: asd
+  hosts: localhost
+  tasks:
+    - name: add hosts Debian
+      add_host:
+        name: "{{ item }}"
+        group: Debian
+        ansible_ssh_user: root
+        ansible_ssh_pass: toor
+        ansible_host_key_checking: false
+      loop:
+        - "PJD-01"
+        - "PJD-02"
+    - name: add hosts CentOS
+      add_host:
+        name: "{{ item }}"
+        group: Centos
+        ansible_ssh_user: root
+        ansible_ssh_pass: toor
+        ansible_host_key_checking: false
+      loop:
+        - "PJC-01"
+        - "PJC-02"
+- name: ping
+  hosts: all
+  vars:
+    ansible_ssh_port: '1022'
+  tasks:
+    - name: ping
+      ping:
+    - name: check service
+      debug:

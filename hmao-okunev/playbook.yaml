@@ -1,0 +1,144 @@
+---
+  - name: "Config wartch of mashines"
+    hosts: all
+    become: yes
+    tasks:
+      - name: "Install git on debian"
+        ansible.builtin.apt:
+          name: "git"
+          update_cache: yes
+        when: ansible_os_family == "Debian"
+      - name: "install git on centos"
+        ansible.builtin.yum:
+          name: "git"
+          disable_gpg_check: yes
+        when: ansible_os_family == "RedHat"
+      - name: "Cloning git repo"
+        ansible.builtin.git:
+          repo: https://github.com/andgabs/skill_hmao
+          dest: /skill_hmao
+      - name: "import list software from file"
+        ansible.builtin.include_vars: /skill_hmao/software.yaml
+      - block: #=======install software for debian=====
+        - name: "Install software from file for debian"
+          ansible.builtin.apt:
+            name: "{{ software }}"
+            update_cache: yes
+        - name: "Install needed sofware for debian"
+          ansible.builtin.apt:
+            name: "{{ item }}"
+          with_items:
+            - firewalld
+            - docker
+            - docker-compose
+            - nginx
+        when: ansible_os_family == "Debian"
+      - block: #=======install software for centos=====
+        - name: "Install software from file for centos"
+          ansible.builtin.yum:
+            name: "{{ software }}"
+            disable_gpg_check: true
+        - name: "Install neeeded software for centos"
+          ansible.builtin.yum:
+            name: "{{ item }}"
+            disable_gpg_check: true
+          with_items:
+            - firewalld
+            - nginx
+            - yum-utils
+        - name: "Add docker repo for centos"
+          ansible.builtin.shell:
+            cmd: "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+        - name: "Install docker for centos"
+          ansible.builtin.yum:
+            name: "{{ item }}"
+            disable_gpg_check: true
+          with_items:
+            - docker-ce
+            - docker-ce-cli
+            - containerd.io 
+            - docker-buildx-plugin
+            - docker-compose-plugin
+        - name: "Install docker compose"
+          ansible.builtin.get_url:
+            url: https://github.com/docker/compose/releases/download/v2.17.2/docker-compose-linux-x86_64
+            dest: /usr/local/bin/docker-compose
+            mode: '0755'
+        when: ansible_os_family == "RedHat"
+      - name: "Remove default service"
+        ansible.posix.firewalld:
+          service: "{{ item }}"
+          state: disabled
+          permanent: true
+          zone: public
+        with_items:
+          - dhcpv6-client
+          - ssh
+      - name: "Add allowed port"
+        ansible.posix.firewalld:
+          port: "{{ item }}"
+          permanent: true
+          zone: public
+          state: enabled
+        with_items:
+          - 80/tcp
+          - 8080/tcp 
+          - 1022/tcp
+      - name: "Configure SSH config"
+        ansible.builtin.lineinfile:
+          path: /etc/ssh/sshd_config
+          regexp: "{{ item.regexp }}"
+          line: "{{ item.line }}"
+          backup: true
+        with_items:
+          - { regexp: '^#Port*', line: 'Port 1022' }
+          - { regexp: '^#PubkeyAuth*', line: 'PubkeyAuthentication yes' }
+      - name: "Disable and stop nginx"
+        ansible.builtin.systemd:
+          name: nginx
+          state: stopped
+          enabled: false
+      - name: "Enable and start docker"
+        ansible.builtin.systemd:
+          name: docker
+          state: started
+          enabled: true
+      - name: "Create skillcloud-nginx"
+        ansible.builtin.file:
+          path: /skillcloud-nginx
+          state: directory
+          owner: root
+          group: root
+          mode: '0755'
+      - name: "Copy to skillcloud-nginx"
+        ansible.builtin.copy:
+          src: /skill_hmao/{{ item }}
+          dest: /skillcloud-nginx/{{ item }}
+          remote_src: yes
+        with_items:
+          - docker-compose.sh
+          - docker-compose.yml
+          - Dockerfile-balance
+          - Dockerfile-site
+          - index.html
+          - nginx.conf
+      - name: "Build conainers"
+        ansible.builtin.shell:
+          cmd: docker build ./ -f Dockerfile-"{{ item }}" -t "{{ item }}"
+          chdir: /skillcloud-nginx
+        with_items:
+          - site
+          - balance
+      - name: "Run docker-compose"
+        ansible.builtin.shell:
+          cmd: docker-compose up -d
+          chdir: /skillcloud-nginx
+      - name: "Disable selinux"
+        ansible.builtin.lineinfile:
+          path: /etc/selinux/config
+          regexp: 'SELINUX=enforcing'
+          line: 'SELINUX=disabled'
+          backup: true
+        when: ansible_os_family == "RedHat"
+      - name: "Rebiit nachines"
+        ansible.builtin.reboot:

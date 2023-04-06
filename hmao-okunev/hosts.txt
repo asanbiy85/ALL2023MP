@@ -1,0 +1,6 @@
+[servers]
+DEB	ansible_host=127.0.0.1	ansible_user=root
+PJD-1	ansible_host=10.10.10.21	ansible_user=root
+PJD-2	ansible_host=10.10.10.22	ansible_user=root
+PJC-1	ansible_host=10.10.10.23	ansible_user=root
+PJC-2	ansible_host=10.10.10.24	ansible_user=root

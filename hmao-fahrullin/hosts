@@ -1,0 +1,8 @@
+[servers]
+PJD-01 ansible_ssh_user=root ansible_ssh_password=toor
+PJD-02 ansible_ssh_user=root ansible_ssh_password=toor
+PJC-01 ansible_ssh_user=root ansible_ssh_password=toor
+PJC-02 ansible_ssh_user=root ansible_ssh_password=toor
+[server]
+DEP ansible_ssh_user=root ansible_ssh_password=toor
+

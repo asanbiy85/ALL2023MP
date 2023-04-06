@@ -1,0 +1,10 @@
+# Variables Vault
+users:
+   - username: Webdeveloper
+     password: Dp68tTJzYXcxVigsqodcK9Ifxgk6lwhf
+   - username: Devopsengineer
+     password: Rt80eN8ERk9RbBQPEFdMHEAqH0G6YJ6n
+   - username: Projectmanager
+     password: 0qZTkqrTLA9ufnBlImTtwWpvO6jfxP6M
+   - username: GabyshevAG
+     password: vbHOvGJEwDekveaN9rynSr18A3KPN6vd    
