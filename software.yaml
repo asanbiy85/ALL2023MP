@@ -1,4 +1,6 @@
 software:
   - curl
   - lynx
+  - vim
+  - mc
 
